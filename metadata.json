@@ -1,0 +1,5 @@
+{
+  "name": "ATP Tennis Match ML Predictions",
+  "description": "ATP tennis match outcome prediction with chronological Elo & serve EWMA features, calibrated gradient-boosted ML evaluation, and historical odds Kelly backtesting.",
+  "requestFramePermissions": []
+}

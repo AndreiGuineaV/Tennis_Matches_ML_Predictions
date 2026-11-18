@@ -1,52 +1,78 @@
-import pandas as pd
+"""Merge annual ATP match CSV files into merged_matches.csv using portable relative paths."""
+
+import argparse
 import glob
-import os
+from pathlib import Path
+
+import pandas as pd
+
+BASE_DIR = Path(__file__).resolve().parent
+DEFAULT_INPUT_DIR = BASE_DIR / "atp_matches"
+DEFAULT_OUTPUT_FILE = BASE_DIR / "merged_matches.csv"
+
 
 def load_and_merge_data(folder_path):
     print("Începem încărcarea și îmbinarea fișierelor CSV...")
-    
-    # 1. Găsim toate fișierele care respectă tiparul numelui
-    # Presupunem că fișierele se numesc "atp_matches_1968.csv", etc.
-    file_pattern = os.path.join(folder_path, "atp_matches_[1-2]*.csv")
-    csv_files = glob.glob(file_pattern)
-    
+
+    folder = Path(folder_path)
+    file_pattern = str(folder / "atp_matches_[1-2]*.csv")
+    csv_files = sorted(glob.glob(file_pattern))
+
     if not csv_files:
-        print("Eroare: Nu am găsit niciun fișier CSV în folderul specificat!")
+        print(f"Eroare: Nu am găsit niciun fișier CSV în folderul specificat: {folder}")
         return None
 
-    # 2. Citim fiecare CSV și îl adăugăm într-o listă
     dataframes = []
-    for file in csv_files:
+    for file_path in csv_files:
         try:
-            # Citim fișierul
-            df_year = pd.read_csv(file)
+            df_year = pd.read_csv(file_path, low_memory=False)
             dataframes.append(df_year)
-            print(f"Încărcat cu succes: {os.path.basename(file)}")
-        except Exception as e:
-            print(f"Eroare la citirea fișierului {file}: {e}")
+            print(f"Încărcat cu succes: {Path(file_path).name}")
+        except Exception as exc:
+            print(f"Eroare la citirea fișierului {file_path}: {exc}")
 
-    # 3. Unim toate DataFrame-urile într-unul singur
+    if not dataframes:
+        return None
+
     matches_df = pd.concat(dataframes, ignore_index=True)
-    
-    # 4. Formatarea datei (Jeff Sackmann folosește formatul YYYYMMDD, ex: 20260508)
-    # Trebuie să transformăm acest număr într-un format de tip DateTime real
-    matches_df['tourney_date'] = pd.to_datetime(matches_df['tourney_date'], format='%Y%m%d', errors='coerce')
-    
-    # 5. ORDONAREA CRONOLOGICĂ (Crucial pentru ELO!)
-    # Sortăm mai întâi după data turneului și apoi după numărul meciului din turneu
-    matches_df = matches_df.sort_values(by=['tourney_date', 'match_num']).reset_index(drop=True)
-    
+    matches_df["tourney_date"] = pd.to_datetime(
+        matches_df["tourney_date"], format="%Y%m%d", errors="coerce"
+    )
+    matches_df = matches_df.sort_values(by=["tourney_date", "match_num"]).reset_index(drop=True)
+
     print("\n--- Rezumat ---")
     print(f"Număr total de meciuri încărcate: {len(matches_df)}")
-    print(f"Perioada acoperită: {matches_df['tourney_date'].min().date()} -> {matches_df['tourney_date'].max().date()}")
-    
+    print(
+        f"Perioada acoperită: {matches_df['tourney_date'].min().date()} -> "
+        f"{matches_df['tourney_date'].max().date()}"
+    )
+
     return matches_df
 
-# --- Cum folosești funcția ---
-# Înlocuiește 'calea/catre/folderul/tau' cu folderul unde ai pus fisierele CSV
-# Ex: folder_path = './data' 
-folder_path = 'C:\\Users\\AndreiGuinea\\OneDrive\\Documente\\Python Projects\\Tennis_Matches_ML_Predictions\\atp_matches' 
 
-matches_df = load_and_merge_data(folder_path)
+def main():
+    parser = argparse.ArgumentParser(
+        description="Merge annual ATP match CSVs into a single chronologically sorted CSV."
+    )
+    parser.add_argument(
+        "--input-dir",
+        type=Path,
+        default=DEFAULT_INPUT_DIR,
+        help="Directory containing atp_matches_YYYY.csv files (default: ./atp_matches)",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=DEFAULT_OUTPUT_FILE,
+        help="Output CSV path (default: ./merged_matches.csv)",
+    )
+    args = parser.parse_args()
 
-matches_df.to_csv('merged_matches.csv', index=False)  
+    matches_df = load_and_merge_data(args.input_dir)
+    if matches_df is not None:
+        matches_df.to_csv(args.output, index=False)
+        print(f"Salvat în: {args.output}")
+
+
+if __name__ == "__main__":
+    main()
